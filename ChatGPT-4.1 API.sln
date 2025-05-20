@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36109.1 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "ChatGPT-4.1 API", "ChatGPT-4.1 API\ChatGPT-4.1 API.pyproj", "{4C5A7320-5BE9-47D5-A48A-B7E4445F450C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4C5A7320-5BE9-47D5-A48A-B7E4445F450C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C5A7320-5BE9-47D5-A48A-B7E4445F450C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {492C14C8-9505-4BBB-B82E-130310F5BAA8}
+	EndGlobalSection
+EndGlobal
