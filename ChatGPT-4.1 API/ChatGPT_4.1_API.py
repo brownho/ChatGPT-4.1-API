@@ -1,4 +1,6 @@
-﻿import os
+import os
+import json
+import subprocess
 import streamlit as st
 from openai import OpenAI
 
@@ -7,8 +9,39 @@ MODEL = "gpt-4.1"  # 1M context as of 2024
 MAX_TOKENS = 32000
 TEMPERATURE = 0.2
 
+# --- LOCAL COMMAND EXECUTION ---
+def run_command(command: str) -> str:
+    """Run a shell command and return its output."""
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        output = result.stdout + result.stderr
+        return output.strip() if output else "(no output)"
+    except Exception as e:
+        return f"Error running command: {e}"
+
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Run a shell command on the local machine and return its output.",
+            "parameters": {
+                "type": "object",
+                "properties": {"command": {"type": "string", "description": "Command to execute"}},
+                "required": ["command"],
+            },
+        },
+    }
+]
+
 # --- API KEY SETUP ---
-API_KEY = "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" 
+API_KEY = os.environ.get("OPENAI_API_KEY")
 if not API_KEY:
     st.error("OpenAI API key not set. Please set OPENAI_API_KEY environment variable.")
     st.stop()
@@ -27,22 +60,32 @@ st.sidebar.title("🗂️ ChatGPT 4.1")
 st.sidebar.markdown(
     """
     - **Context window:** up to 1 million tokens
-    - **Model:** gpt-4-1106-preview
+    - **Model:** gpt-4.1
     - [GitHub](https://github.com/openai/openai-python)
     """
 )
+
+if "computer_mode" not in st.session_state:
+    st.session_state.computer_mode = False
+
 with st.sidebar.expander("⚙️ Settings", expanded=False):
     st.write("Current Model: ", MODEL)
     temp = st.slider("Temperature", 0.0, 1.0, TEMPERATURE, 0.05)
     max_tokens = st.slider("Max Response Tokens", 512, 32768, MAX_TOKENS, 512)
-else:
-    temp = TEMPERATURE
-    max_tokens = MAX_TOKENS
+    st.session_state.computer_mode = st.checkbox(
+        "Enable computer use", value=st.session_state.computer_mode
+    )
 
 # --- Chat Memory ---
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "system", "content": "You are ChatGPT, a helpful assistant with a 1 million token context window."}
+        {
+            "role": "system",
+            "content": (
+                "You are ChatGPT, a helpful assistant with a 1 million token context window. "
+                "When computer use is enabled you may run shell commands using the `run_command` tool."
+            ),
+        }
     ]
 
 # --- MAIN CHAT WINDOW ---
@@ -91,14 +134,45 @@ if user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.spinner("ChatGPT is thinking..."):
         try:
-            response = client.chat.completions.create(
-                model=MODEL,
-                messages=st.session_state.messages,
-                max_tokens=max_tokens,
-                temperature=temp,
-                stream=False,
-            )
-            answer = response.choices[0].message.content
+            if st.session_state.computer_mode:
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=st.session_state.messages,
+                    max_tokens=max_tokens,
+                    temperature=temp,
+                    tools=TOOLS,
+                    tool_choice="auto",
+                )
+                message = response.choices[0].message
+                while message.tool_calls:
+                    for call in message.tool_calls:
+                        if call.function.name == "run_command":
+                            args = json.loads(call.function.arguments)
+                            output = run_command(args.get("command", ""))
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "run_command",
+                                    "content": output,
+                                }
+                            )
+                    response = client.chat.completions.create(
+                        model=MODEL,
+                        messages=st.session_state.messages,
+                        max_tokens=max_tokens,
+                        temperature=temp,
+                    )
+                    message = response.choices[0].message
+                answer = message.content
+            else:
+                response = client.chat.completions.create(
+                    model=MODEL,
+                    messages=st.session_state.messages,
+                    max_tokens=max_tokens,
+                    temperature=temp,
+                    stream=False,
+                )
+                answer = response.choices[0].message.content
         except Exception as e:
             answer = f"Error: {e}"
         st.session_state.messages.append({"role": "assistant", "content": answer})
@@ -107,6 +181,12 @@ if user_input:
 # --- Clear Chat Button ---
 if st.sidebar.button("🧹 Clear chat history"):
     st.session_state.messages = [
-        {"role": "system", "content": "You are ChatGPT, a helpful assistant with a 1 million token context window."}
+        {
+            "role": "system",
+            "content": (
+                "You are ChatGPT, a helpful assistant with a 1 million token context window. "
+                "When computer use is enabled you may run shell commands using the `run_command` tool."
+            ),
+        }
     ]
     st.experimental_rerun()
