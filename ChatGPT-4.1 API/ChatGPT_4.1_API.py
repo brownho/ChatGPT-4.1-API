@@ -1,6 +1,8 @@
 import os
 import json
 import subprocess
+import io
+import zipfile
 import streamlit as st
 from openai import OpenAI
 
@@ -40,6 +42,30 @@ TOOLS = [
     }
 ]
 
+# --- Power BI Processing ---
+def process_pbix(pbix_bytes: bytes) -> dict:
+    """Extract key JSON files from a PBIX archive."""
+    result = {}
+    try:
+        with zipfile.ZipFile(io.BytesIO(pbix_bytes)) as zf:
+            for name in zf.namelist():
+                lower = name.lower()
+                if lower.endswith("datamodelschema"):
+                    result["DataModelSchema"] = json.loads(
+                        zf.read(name).decode("utf-8", errors="ignore")
+                    )
+                elif lower.endswith("metadata"):
+                    result["Metadata"] = json.loads(
+                        zf.read(name).decode("utf-8", errors="ignore")
+                    )
+                elif lower.endswith("report/layout") or lower.endswith("layout"):
+                    result["Layout"] = json.loads(
+                        zf.read(name).decode("utf-8", errors="ignore")
+                    )
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
 # --- API KEY SETUP ---
 API_KEY = os.environ.get("OPENAI_API_KEY")
 if not API_KEY:
@@ -64,6 +90,10 @@ st.sidebar.markdown(
     - [GitHub](https://github.com/openai/openai-python)
     """
 )
+
+# Set defaults
+temp = TEMPERATURE
+max_tokens = MAX_TOKENS
 
 if "computer_mode" not in st.session_state:
     st.session_state.computer_mode = False
@@ -120,6 +150,31 @@ st.markdown(
     </style>
     """, unsafe_allow_html=True
 )
+
+# --- Power BI Upload ---
+pbix_file = st.sidebar.file_uploader("Upload Power BI .pbix", type=["pbix"])
+if pbix_file:
+    with st.spinner("Processing PBIX..."):
+        pbix_data = process_pbix(pbix_file.getvalue())
+        st.session_state.pbix_json = json.dumps(pbix_data, indent=2)
+
+if "pbix_json" in st.session_state:
+    st.subheader("Extracted PBIX JSON")
+    st.download_button(
+        "Download JSON",
+        st.session_state.pbix_json,
+        file_name="pbix.json",
+        mime="application/json",
+    )
+    st.text_area("PBIX JSON Preview", st.session_state.pbix_json, height=300)
+    if st.button("Send PBIX JSON to ChatGPT"):
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": f"PBIX JSON:\n```json\n{st.session_state.pbix_json}\n```",
+            }
+        )
+        st.experimental_rerun()
 
 # Show conversation history
 for msg in st.session_state.messages[1:]:
