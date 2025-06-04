@@ -27,6 +27,21 @@ def run_command(command: str) -> str:
     except Exception as e:
         return f"Error running command: {e}"
 
+def get_pbix_json() -> str:
+    """Return the PBIX JSON currently stored in session state."""
+    return st.session_state.get("pbix_json", "")
+
+
+def update_pbix_json(json_str: str) -> str:
+    """Validate and store updated PBIX JSON."""
+    try:
+        parsed = json.loads(json_str)
+        st.session_state.pbix_json = json.dumps(parsed, indent=2)
+        st.session_state.pbix_data = parsed
+        return "PBIX JSON updated"
+    except Exception as e:
+        return f"Error updating PBIX JSON: {e}"
+
 TOOLS = [
     {
         "type": "function",
@@ -39,7 +54,27 @@ TOOLS = [
                 "required": ["command"],
             },
         },
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pbix_json",
+            "description": "Return the currently loaded PBIX JSON, if any.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_pbix_json",
+            "description": "Replace the current PBIX JSON with an updated JSON string.",
+            "parameters": {
+                "type": "object",
+                "properties": {"json_str": {"type": "string", "description": "The complete PBIX JSON."}},
+                "required": ["json_str"],
+            },
+        },
+    },
 ]
 
 # --- Power BI Processing ---
@@ -113,7 +148,8 @@ if "messages" not in st.session_state:
             "role": "system",
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
-                "When computer use is enabled you may run shell commands using the `run_command` tool."
+                "When computer use is enabled you may run shell commands using the `run_command` tool. "
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json` and `update_pbix_json` tools."
             ),
         }
     ]
@@ -157,6 +193,7 @@ if pbix_file:
     with st.spinner("Processing PBIX..."):
         pbix_data = process_pbix(pbix_file.getvalue())
         st.session_state.pbix_json = json.dumps(pbix_data, indent=2)
+        st.session_state.pbix_data = pbix_data
 
 if "pbix_json" in st.session_state:
     st.subheader("Extracted PBIX JSON")
@@ -211,6 +248,25 @@ if user_input:
                                     "content": output,
                                 }
                             )
+                        elif call.function.name == "get_pbix_json":
+                            output = get_pbix_json()
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "get_pbix_json",
+                                    "content": output,
+                                }
+                            )
+                        elif call.function.name == "update_pbix_json":
+                            args = json.loads(call.function.arguments)
+                            output = update_pbix_json(args.get("json_str", ""))
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "update_pbix_json",
+                                    "content": output,
+                                }
+                            )
                     response = client.chat.completions.create(
                         model=MODEL,
                         messages=st.session_state.messages,
@@ -240,7 +296,8 @@ if st.sidebar.button("🧹 Clear chat history"):
             "role": "system",
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
-                "When computer use is enabled you may run shell commands using the `run_command` tool."
+                "When computer use is enabled you may run shell commands using the `run_command` tool. "
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json` and `update_pbix_json` tools."
             ),
         }
     ]
