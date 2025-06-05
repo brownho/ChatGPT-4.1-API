@@ -1,8 +1,6 @@
-<<<<<<
 import io
 import json
 import zipfile
-import json
 from typing import Dict, Any
 
 def process_pbix(pbix_bytes: bytes) -> dict:
