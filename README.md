@@ -16,10 +16,15 @@ of the current user.
 ## PBIX Editing Tools
 
 When a Power BI report is uploaded, ChatGPT can analyze or modify the extracted
-JSON by calling two tools:
+JSON by calling several tools:
 
 * `get_pbix_json` – returns the current PBIX JSON so the assistant can inspect
   it and answer questions about the report.
 * `update_pbix_json` – accepts a complete JSON string and replaces the stored
-  report data with the new version. The parsed data is saved in the session so
-  you can continue editing or download the updated JSON from the sidebar.
+  report data with the new version.
+* `add_dax_measure` – create or update a DAX measure in the `DataModelSchema`.
+* `create_relationship` – define a relationship between two tables.
+* `add_visual` – append a new visual definition to the `Layout` of the report.
+
+The parsed data is saved in the session so you can continue editing or
+download the updated JSON from the sidebar.
