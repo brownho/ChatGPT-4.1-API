@@ -25,6 +25,12 @@ JSON by calling several tools:
 * `add_dax_measure` – create or update a DAX measure in the `DataModelSchema`.
 * `create_relationship` – define a relationship between two tables.
 * `add_visual` – append a new visual definition to the `Layout` of the report.
+* `update_power_query` – modify or add a Power Query (M) script in the report metadata.
+* `add_data_source` – register a new data source definition.
+* `set_parameter` – create or update a query parameter value.
+* `set_refresh_policy` – configure refresh policy details.
+* `preview_table` – return sample rows from a table for inspection.
+* `run_dax_query` – run a limited DAX query for debugging purposes.
 
 The parsed data is saved in the session so you can continue editing or
 download the updated JSON from the sidebar.

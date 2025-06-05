@@ -9,6 +9,12 @@ from pbix_utils import (
     add_dax_measure as _add_dax_measure,
     create_relationship as _create_relationship,
     add_visual as _add_visual,
+    update_power_query as _update_power_query,
+    add_data_source as _add_data_source,
+    set_parameter as _set_parameter,
+    set_refresh_policy as _set_refresh_policy,
+    preview_table as _preview_table,
+    run_dax_query as _run_dax_query,
 )
 
 # --- SETTINGS ---
@@ -83,6 +89,77 @@ def add_visual(page_index: int, visual_json: str) -> str:
         return "Visual added"
     except Exception as e:
         return f"Error adding visual: {e}"
+
+
+def update_power_query(query_name: str, script: str) -> str:
+    """Add or update an M script in the loaded PBIX metadata."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        _update_power_query(st.session_state.pbix_data, query_name, script)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Power Query updated"
+    except Exception as e:
+        return f"Error updating query: {e}"
+
+
+def add_data_source(source_json: str) -> str:
+    """Append a new data source definition."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        source = json.loads(source_json)
+        _add_data_source(st.session_state.pbix_data, source)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Data source added"
+    except Exception as e:
+        return f"Error adding data source: {e}"
+
+
+def set_parameter(name: str, value: str) -> str:
+    """Create or update a parameter value."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        _set_parameter(st.session_state.pbix_data, name, value)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Parameter set"
+    except Exception as e:
+        return f"Error setting parameter: {e}"
+
+
+def set_refresh_policy(policy_json: str) -> str:
+    """Update refresh policy information."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        policy = json.loads(policy_json)
+        _set_refresh_policy(st.session_state.pbix_data, policy)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Refresh policy updated"
+    except Exception as e:
+        return f"Error setting refresh policy: {e}"
+
+
+def preview_table(table_name: str, max_rows: int = 5) -> str:
+    """Return a preview of a table's rows as JSON."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    rows = _preview_table(st.session_state.pbix_data, table_name, max_rows)
+    return json.dumps(rows, indent=2)
+
+
+def run_dax_query(expression: str) -> str:
+    """Execute a very small subset of DAX queries for debugging."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        result = _run_dax_query(st.session_state.pbix_data, expression)
+        if isinstance(result, (dict, list)):
+            return json.dumps(result, indent=2)
+        return str(result)
+    except Exception as e:
+        return f"Error running query: {e}"
 
 TOOLS = [
     {
@@ -162,6 +239,91 @@ TOOLS = [
                     "visual_json": {"type": "string", "description": "Visual definition as JSON"},
                 },
                 "required": ["page_index", "visual_json"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_power_query",
+            "description": "Create or update an M script in the report metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query_name": {"type": "string"},
+                    "script": {"type": "string"},
+                },
+                "required": ["query_name", "script"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_data_source",
+            "description": "Add a new data source definition to the PBIX metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source_json": {"type": "string", "description": "Data source definition as JSON"},
+                },
+                "required": ["source_json"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_parameter",
+            "description": "Set or update a parameter value in the PBIX metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "value": {"type": "string"},
+                },
+                "required": ["name", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_refresh_policy",
+            "description": "Update refresh policy details in the PBIX metadata.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "policy_json": {"type": "string", "description": "Policy definition as JSON"},
+                },
+                "required": ["policy_json"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "preview_table",
+            "description": "Return sample rows from a model table.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table_name": {"type": "string"},
+                    "max_rows": {"type": "integer", "default": 5},
+                },
+                "required": ["table_name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_dax_query",
+            "description": "Execute a limited DAX query for debugging.",
+            "parameters": {
+                "type": "object",
+                "properties": {"expression": {"type": "string"}},
+                "required": ["expression"],
             },
         },
     },
@@ -256,7 +418,7 @@ if "messages" not in st.session_state:
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
                 "When computer use is enabled you may run shell commands using the `run_command` tool. "
-                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, and `add_visual` tools."
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, `add_visual`, `update_power_query`, `add_data_source`, `set_parameter`, `set_refresh_policy`, `preview_table`, and `run_dax_query` tools."
             ),
         }
     ]
@@ -458,7 +620,7 @@ if st.sidebar.button("🧹 Clear chat history"):
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
                 "When computer use is enabled you may run shell commands using the `run_command` tool. "
-                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, and `add_visual` tools."
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, `add_visual`, `update_power_query`, `add_data_source`, `set_parameter`, `set_refresh_policy`, `preview_table`, and `run_dax_query` tools."
             ),
         }
     ]
