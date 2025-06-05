@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>4c5a7320-5be9-47d5-a48a-b7e4445f450c</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>ChatGPT_4.1_API.py</StartupFile>
+    <StartupFile>..\ChatGPT_4.1_API.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -21,7 +21,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="ChatGPT_4.1_API.py" />
+    <Compile Include="..\ChatGPT_4.1_API.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
