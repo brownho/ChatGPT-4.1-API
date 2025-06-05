@@ -101,6 +101,23 @@ def process_pbix(pbix_bytes: bytes) -> dict:
         result["error"] = str(e)
     return result
 
+# --- Repackage PBIX ---
+def create_pbix() -> bytes:
+    """Create a new PBIX archive from ``st.session_state.pbix_data``."""
+    data = st.session_state.get("pbix_data")
+    if not data:
+        raise ValueError("No PBIX data available")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        if "DataModelSchema" in data:
+            zf.writestr("DataModelSchema", json.dumps(data["DataModelSchema"]))
+        if "Metadata" in data:
+            zf.writestr("Metadata", json.dumps(data["Metadata"]))
+        if "Layout" in data:
+            zf.writestr("Report/Layout", json.dumps(data["Layout"]))
+    buffer.seek(0)
+    return buffer.getvalue()
+
 # --- API KEY SETUP ---
 API_KEY = os.environ.get("OPENAI_API_KEY")
 if not API_KEY:
@@ -203,6 +220,18 @@ if "pbix_json" in st.session_state:
         file_name="pbix.json",
         mime="application/json",
     )
+    pbix_bytes = None
+    try:
+        pbix_bytes = create_pbix()
+    except Exception:
+        pbix_bytes = None
+    if pbix_bytes:
+        st.download_button(
+            "Download PBIX",
+            pbix_bytes,
+            file_name="updated.pbix",
+            mime="application/octet-stream",
+        )
     st.text_area("PBIX JSON Preview", st.session_state.pbix_json, height=300)
     if st.button("Send PBIX JSON to ChatGPT"):
         st.session_state.messages.append(
