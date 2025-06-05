@@ -5,6 +5,11 @@ import io
 import zipfile
 import streamlit as st
 from openai import OpenAI
+from pbix_utils import (
+    add_dax_measure as _add_dax_measure,
+    create_relationship as _create_relationship,
+    add_visual as _add_visual,
+)
 
 # --- SETTINGS ---
 MODEL = "gpt-4.1"  # 1M context as of 2024
@@ -42,6 +47,43 @@ def update_pbix_json(json_str: str) -> str:
     except Exception as e:
         return f"Error updating PBIX JSON: {e}"
 
+
+def add_dax_measure(table_name: str, measure_name: str, expression: str) -> str:
+    """Add or update a DAX measure in the loaded PBIX data."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        _add_dax_measure(st.session_state.pbix_data, table_name, measure_name, expression)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "DAX measure added"
+    except Exception as e:
+        return f"Error adding measure: {e}"
+
+
+def create_relationship(from_table: str, from_column: str, to_table: str, to_column: str) -> str:
+    """Create a relationship between two tables."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        _create_relationship(st.session_state.pbix_data, from_table, from_column, to_table, to_column)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Relationship created"
+    except Exception as e:
+        return f"Error creating relationship: {e}"
+
+
+def add_visual(page_index: int, visual_json: str) -> str:
+    """Add a new visual to the specified page in the Layout."""
+    if "pbix_data" not in st.session_state:
+        return "No PBIX JSON loaded"
+    try:
+        visual = json.loads(visual_json)
+        _add_visual(st.session_state.pbix_data, page_index, visual)
+        st.session_state.pbix_json = json.dumps(st.session_state.pbix_data, indent=2)
+        return "Visual added"
+    except Exception as e:
+        return f"Error adding visual: {e}"
+
 TOOLS = [
     {
         "type": "function",
@@ -75,6 +117,54 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_dax_measure",
+            "description": "Add or update a DAX measure in the loaded PBIX file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "table_name": {"type": "string", "description": "Table to contain the measure"},
+                    "measure_name": {"type": "string", "description": "Name of the measure"},
+                    "expression": {"type": "string", "description": "DAX expression"},
+                },
+                "required": ["table_name", "measure_name", "expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_relationship",
+            "description": "Create a relationship between two tables in the PBIX model.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from_table": {"type": "string"},
+                    "from_column": {"type": "string"},
+                    "to_table": {"type": "string"},
+                    "to_column": {"type": "string"},
+                },
+                "required": ["from_table", "from_column", "to_table", "to_column"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_visual",
+            "description": "Add a new visual to a report page.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "page_index": {"type": "integer", "description": "Zero-based page index"},
+                    "visual_json": {"type": "string", "description": "Visual definition as JSON"},
+                },
+                "required": ["page_index", "visual_json"],
+            },
+        },
+    },
 ]
 
 # --- Power BI Processing ---
@@ -100,6 +190,23 @@ def process_pbix(pbix_bytes: bytes) -> dict:
     except Exception as e:
         result["error"] = str(e)
     return result
+
+# --- Repackage PBIX ---
+def create_pbix() -> bytes:
+    """Create a new PBIX archive from ``st.session_state.pbix_data``."""
+    data = st.session_state.get("pbix_data")
+    if not data:
+        raise ValueError("No PBIX data available")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        if "DataModelSchema" in data:
+            zf.writestr("DataModelSchema", json.dumps(data["DataModelSchema"]))
+        if "Metadata" in data:
+            zf.writestr("Metadata", json.dumps(data["Metadata"]))
+        if "Layout" in data:
+            zf.writestr("Report/Layout", json.dumps(data["Layout"]))
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # --- API KEY SETUP ---
 API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -149,7 +256,7 @@ if "messages" not in st.session_state:
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
                 "When computer use is enabled you may run shell commands using the `run_command` tool. "
-                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json` and `update_pbix_json` tools."
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, and `add_visual` tools."
             ),
         }
     ]
@@ -203,6 +310,18 @@ if "pbix_json" in st.session_state:
         file_name="pbix.json",
         mime="application/json",
     )
+    pbix_bytes = None
+    try:
+        pbix_bytes = create_pbix()
+    except Exception:
+        pbix_bytes = None
+    if pbix_bytes:
+        st.download_button(
+            "Download PBIX",
+            pbix_bytes,
+            file_name="updated.pbix",
+            mime="application/octet-stream",
+        )
     st.text_area("PBIX JSON Preview", st.session_state.pbix_json, height=300)
     if st.button("Send PBIX JSON to ChatGPT"):
         st.session_state.messages.append(
@@ -267,6 +386,48 @@ if user_input:
                                     "content": output,
                                 }
                             )
+                        elif call.function.name == "add_dax_measure":
+                            args = json.loads(call.function.arguments)
+                            output = add_dax_measure(
+                                args.get("table_name", ""),
+                                args.get("measure_name", ""),
+                                args.get("expression", ""),
+                            )
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "add_dax_measure",
+                                    "content": output,
+                                }
+                            )
+                        elif call.function.name == "create_relationship":
+                            args = json.loads(call.function.arguments)
+                            output = create_relationship(
+                                args.get("from_table", ""),
+                                args.get("from_column", ""),
+                                args.get("to_table", ""),
+                                args.get("to_column", ""),
+                            )
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "create_relationship",
+                                    "content": output,
+                                }
+                            )
+                        elif call.function.name == "add_visual":
+                            args = json.loads(call.function.arguments)
+                            output = add_visual(
+                                args.get("page_index", 0),
+                                args.get("visual_json", ""),
+                            )
+                            st.session_state.messages.append(
+                                {
+                                    "role": "function",
+                                    "name": "add_visual",
+                                    "content": output,
+                                }
+                            )
                     response = client.chat.completions.create(
                         model=MODEL,
                         messages=st.session_state.messages,
@@ -297,7 +458,7 @@ if st.sidebar.button("🧹 Clear chat history"):
             "content": (
                 "You are ChatGPT, a helpful assistant with a 1 million token context window. "
                 "When computer use is enabled you may run shell commands using the `run_command` tool. "
-                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json` and `update_pbix_json` tools."
+                "You can inspect or modify an uploaded Power BI report using the `get_pbix_json`, `update_pbix_json`, `add_dax_measure`, `create_relationship`, and `add_visual` tools."
             ),
         }
     ]
