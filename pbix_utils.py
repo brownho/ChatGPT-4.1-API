@@ -88,3 +88,66 @@ def add_visual(data: Dict[str, Any], page_index: int, visual: Dict[str, Any]) ->
     containers = page.setdefault("visualContainers", [])
     containers.append(visual)
     return data
+
+
+def update_power_query(data: Dict[str, Any], query_name: str, script: str) -> Dict[str, Any]:
+    """Add or update an M script in the Metadata section."""
+    metadata = data.setdefault("Metadata", {})
+    queries = metadata.setdefault("queries", [])
+    for q in queries:
+        if q.get("name") == query_name:
+            q["expression"] = script
+            return data
+    queries.append({"name": query_name, "expression": script})
+    return data
+
+
+def add_data_source(data: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+    """Append a new data source definition to Metadata."""
+    metadata = data.setdefault("Metadata", {})
+    sources = metadata.setdefault("dataSources", [])
+    sources.append(source)
+    return data
+
+
+def set_parameter(data: Dict[str, Any], param_name: str, value: Any) -> Dict[str, Any]:
+    """Create or update a parameter value in Metadata."""
+    metadata = data.setdefault("Metadata", {})
+    parameters = metadata.setdefault("parameters", [])
+    for p in parameters:
+        if p.get("name") == param_name:
+            p["currentValue"] = value
+            return data
+    parameters.append({"name": param_name, "currentValue": value})
+    return data
+
+
+def set_refresh_policy(data: Dict[str, Any], policy: Dict[str, Any]) -> Dict[str, Any]:
+    """Set refresh policy details inside Metadata."""
+    metadata = data.setdefault("Metadata", {})
+    metadata["refreshPolicy"] = policy
+    return data
+
+
+def preview_table(data: Dict[str, Any], table_name: str, max_rows: int = 5) -> Any:
+    """Return the first rows from a table if present."""
+    schema = data.get("DataModelSchema", {})
+    model = schema.get("model", {})
+    tables = model.get("tables", [])
+    for table in tables:
+        if table.get("name") == table_name:
+            rows = table.get("rows", [])
+            if max_rows is None:
+                return rows
+            return rows[:max_rows]
+    return []
+
+
+def run_dax_query(data: Dict[str, Any], expression: str) -> Any:
+    """Very small subset of DAX query capability for debugging."""
+    expr = expression.strip().upper()
+    if expr.startswith("ROWCOUNT(") and expr.endswith(")"):
+        table = expr[len("ROWCOUNT(") : -1].strip()
+        rows = preview_table(data, table, None)
+        return len(rows)
+    return "Query not supported"
