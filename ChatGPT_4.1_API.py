@@ -6,6 +6,8 @@ import zipfile
 import streamlit as st
 from openai import OpenAI
 from pbix_utils import (
+    process_pbix as _process_pbix,
+    package_pbix as _package_pbix,
     add_dax_measure as _add_dax_measure,
     create_relationship as _create_relationship,
     add_visual as _add_visual,
@@ -329,46 +331,13 @@ TOOLS = [
     },
 ]
 
-# --- Power BI Processing ---
-def process_pbix(pbix_bytes: bytes) -> dict:
-    """Extract key JSON files from a PBIX archive."""
-    result = {}
-    try:
-        with zipfile.ZipFile(io.BytesIO(pbix_bytes)) as zf:
-            for name in zf.namelist():
-                lower = name.lower()
-                if lower.endswith("datamodelschema"):
-                    result["DataModelSchema"] = json.loads(
-                        zf.read(name).decode("utf-8", errors="ignore")
-                    )
-                elif lower.endswith("metadata"):
-                    result["Metadata"] = json.loads(
-                        zf.read(name).decode("utf-8", errors="ignore")
-                    )
-                elif lower.endswith("report/layout") or lower.endswith("layout"):
-                    result["Layout"] = json.loads(
-                        zf.read(name).decode("utf-8", errors="ignore")
-                    )
-    except Exception as e:
-        result["error"] = str(e)
-    return result
-
 # --- Repackage PBIX ---
 def create_pbix() -> bytes:
     """Create a new PBIX archive from ``st.session_state.pbix_data``."""
     data = st.session_state.get("pbix_data")
     if not data:
         raise ValueError("No PBIX data available")
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        if "DataModelSchema" in data:
-            zf.writestr("DataModelSchema", json.dumps(data["DataModelSchema"]))
-        if "Metadata" in data:
-            zf.writestr("Metadata", json.dumps(data["Metadata"]))
-        if "Layout" in data:
-            zf.writestr("Report/Layout", json.dumps(data["Layout"]))
-    buffer.seek(0)
-    return buffer.getvalue()
+    return _package_pbix(data)
 
 # --- API KEY SETUP ---
 API_KEY = os.environ.get("OPENAI_API_KEY")
@@ -460,7 +429,7 @@ st.markdown(
 pbix_file = st.sidebar.file_uploader("Upload Power BI .pbix", type=["pbix"])
 if pbix_file:
     with st.spinner("Processing PBIX..."):
-        pbix_data = process_pbix(pbix_file.getvalue())
+        pbix_data = _process_pbix(pbix_file.getvalue())
         st.session_state.pbix_json = json.dumps(pbix_data, indent=2)
         st.session_state.pbix_data = pbix_data
 
